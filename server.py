@@ -708,9 +708,10 @@ class PrinterOneServer:
                     # Check if we should convert plain text to PDF
                     use_pdf_conversion = self.config.get("use_pdf_conversion", True)
                     
-                    # Convert plain text to PDF for PDF printers if enabled
-                    if use_pdf_conversion and "Microsoft Print to PDF" in printer_name and self.is_plain_text_data(data):
-                        self.log(f"[PDF] Converting plain text to PDF for PDF printer...")
+                    # Convert plain text to PDF if enabled and data is plain text
+                    # This ensures text is properly formatted with fonts for printing
+                    if use_pdf_conversion and self.is_plain_text_data(data):
+                        self.log(f"[PDF] Converting plain text to PDF for proper formatting...")
                         try:
                             pdf_data = self.convert_raw_to_pdf(data, save_file=False)
                             if pdf_data:
