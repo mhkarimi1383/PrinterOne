@@ -348,11 +348,21 @@ class PrinterOneServer:
         """Find and register a font that supports Persian/Arabic characters"""
         try:
             # Check if font is already registered
-            if hasattr(self, '_unicode_font_registered') and self._unicode_font_registered:
+            if hasattr(self, '_unicode_font_registered') and self._unicode_font_registered and hasattr(self, '_unicode_font_name'):
                 return self._unicode_font_name
+            
+            # Verify we're on Windows
+            if os.name != 'nt':
+                self.log(f"[WARN] Unicode font registration only supported on Windows")
+                return None
             
             # Try common Windows fonts that support Persian/Arabic
             windows_fonts_dir = os.path.join(os.environ.get('WINDIR', 'C:\\Windows'), 'Fonts')
+            
+            # Verify fonts directory exists
+            if not os.path.exists(windows_fonts_dir):
+                self.log(f"[WARN] Windows fonts directory not found: {windows_fonts_dir}")
+                return None
             
             # Priority list of fonts that support Persian/Arabic
             persian_fonts = [
@@ -503,16 +513,18 @@ class PrinterOneServer:
             # Note: Windows-1256 doesn't support all Persian characters (e.g., Persian Yeh ی)
             # but may work for some legacy systems
             try:
-                text = raw_data.decode('windows-1256', errors='ignore')
-                cleaned = ''.join(char if char.isprintable() or char in '\n\r\t' else ' ' for char in text)
-                if cleaned.strip():
-                    return cleaned.strip()
+                text = raw_data.decode('windows-1256', errors='replace')
+                # Check if we have meaningful text (not just replacement characters)
+                if text.count('�') < len(text) * 0.3:  # Less than 30% replacement chars
+                    cleaned = ''.join(char if char.isprintable() or char in '\n\r\t' else ' ' for char in text)
+                    if cleaned.strip():
+                        return cleaned.strip()
             except:
                 pass
             
             # Try Windows-1252 (common in Windows printing for Latin text)
             try:
-                text = raw_data.decode('windows-1252', errors='ignore')
+                text = raw_data.decode('windows-1252', errors='replace')
                 cleaned = ''.join(char if char.isprintable() or char in '\n\r\t' else ' ' for char in text)
                 if cleaned.strip():
                     return cleaned.strip()
@@ -521,7 +533,7 @@ class PrinterOneServer:
             
             # Try ASCII with error handling as last resort
             try:
-                text = raw_data.decode('ascii', errors='ignore')
+                text = raw_data.decode('ascii', errors='replace')
                 cleaned = ''.join(char if char.isprintable() or char in '\n\r\t' else ' ' for char in text)
                 if cleaned.strip():
                     return cleaned.strip()
