@@ -143,6 +143,10 @@ AUTO_START_MODE = False
 # Encoding constants
 MAX_REPLACEMENT_CHAR_RATIO = 0.3  # Maximum ratio of replacement characters before rejecting decoded text
 
+# Data analysis constants
+HEADER_SAMPLE_SIZE = 100  # Number of bytes to check for format headers (PDF, etc.)
+TEXT_SAMPLE_SIZE = 200    # Number of characters to sample when detecting text
+
 class PrinterOneServer:
     """PrinterOne TCP Server"""
     
@@ -624,19 +628,19 @@ class PrinterOneServer:
             return "PostScript"
         elif data.startswith(b'\x02'):
             return "ZPL (Zebra)"
-        elif b'PDF' in data[:100]:
+        elif b'PDF' in data[:HEADER_SAMPLE_SIZE]:
             return "PDF document"
         elif b'Microsoft Office' in data or b'Word' in data or b'.docx' in data or b'.doc' in data:
             return "Microsoft Office document"
-        elif b'%PDF' in data[:100]:
+        elif b'%PDF' in data[:HEADER_SAMPLE_SIZE]:
             return "PDF format"
         else:
             # Try to detect if it contains printable text
             try:
                 decoded = data.decode('utf-8', errors='ignore')
-                if len(decoded.strip()) > 0 and any(c.isprintable() and c not in '\r\n\t' for c in decoded[:200]):
+                if len(decoded.strip()) > 0 and any(c.isprintable() and c not in '\r\n\t' for c in decoded[:TEXT_SAMPLE_SIZE]):
                     return f"Text document ({len(data)} bytes)"
-            except:
+            except (UnicodeDecodeError, AttributeError):
                 pass
             
             return f"Binary/Unknown format ({len(data)} bytes)"
@@ -653,15 +657,15 @@ class PrinterOneServer:
             return False
         elif data.startswith(b'\x02'):  # ZPL
             return False
-        elif b'%PDF' in data[:100]:  # PDF
+        elif b'%PDF' in data[:HEADER_SAMPLE_SIZE]:  # PDF
             return False
         
         # Check if it's printable text
         try:
             decoded = data.decode('utf-8', errors='ignore')
-            if len(decoded.strip()) > 0 and any(c.isprintable() and c not in '\r\n\t' for c in decoded[:200]):
+            if len(decoded.strip()) > 0 and any(c.isprintable() and c not in '\r\n\t' for c in decoded[:TEXT_SAMPLE_SIZE]):
                 return True
-        except:
+        except (UnicodeDecodeError, AttributeError):
             pass
         
         return False
