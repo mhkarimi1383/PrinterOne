@@ -106,6 +106,8 @@ try:
             startup_logger.info("Importing PDF modules...")
         from reportlab.pdfgen import canvas
         from reportlab.lib.pagesizes import letter
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
         if startup_logger:
             startup_logger.info("PDF modules imported successfully")
     except ImportError as e:
@@ -342,6 +344,47 @@ class PrinterOneServer:
             self.log(f"[!] Error listing printers: {e}")
             return []
     
+    def get_unicode_font(self):
+        """Find and register a font that supports Persian/Arabic characters"""
+        try:
+            # Check if font is already registered
+            if hasattr(self, '_unicode_font_registered') and self._unicode_font_registered:
+                return self._unicode_font_name
+            
+            # Try common Windows fonts that support Persian/Arabic
+            windows_fonts_dir = os.path.join(os.environ.get('WINDIR', 'C:\\Windows'), 'Fonts')
+            
+            # Priority list of fonts that support Persian/Arabic
+            persian_fonts = [
+                ('tahoma.ttf', 'Tahoma'),
+                ('tahomabd.ttf', 'Tahoma-Bold'),
+                ('arial.ttf', 'Arial'),
+                ('arialbd.ttf', 'Arial-Bold'),
+                ('times.ttf', 'TimesNewRoman'),
+                ('timesbd.ttf', 'TimesNewRoman-Bold'),
+            ]
+            
+            for font_file, font_name in persian_fonts:
+                font_path = os.path.join(windows_fonts_dir, font_file)
+                if os.path.exists(font_path):
+                    try:
+                        pdfmetrics.registerFont(TTFont(font_name, font_path))
+                        self._unicode_font_registered = True
+                        self._unicode_font_name = font_name
+                        self.log(f"[INFO] Registered Unicode font: {font_name}")
+                        return font_name
+                    except Exception as e:
+                        self.log(f"[WARN] Failed to register font {font_name}: {e}")
+                        continue
+            
+            # If no suitable font found, return None to use default font
+            self.log(f"[WARN] No Unicode font found, using default font (Persian text may not render correctly)")
+            return None
+            
+        except Exception as e:
+            self.log(f"[WARN] Error finding Unicode font: {e}")
+            return None
+    
     def convert_raw_to_pdf(self, raw_data, save_file=False):
         """Convert raw data to PDF for testing with PDF printers (test client only)"""
         try:
@@ -354,12 +397,21 @@ class PrinterOneServer:
             c = canvas.Canvas(temp_pdf_path, pagesize=letter)
             data_format = self.analyze_raw_data(raw_data)
             
+            # Get Unicode font for Persian/RTL text support
+            unicode_font = self.get_unicode_font()
+            
             # Add title
-            c.setFont("Helvetica-Bold", 16)
+            if unicode_font:
+                c.setFont(unicode_font, 16)
+            else:
+                c.setFont("Helvetica-Bold", 16)
             c.drawString(100, 750, "PrinterOne - Test Print Job")
             
             # Add info
-            c.setFont("Helvetica", 12)
+            if unicode_font:
+                c.setFont(unicode_font, 12)
+            else:
+                c.setFont("Helvetica", 12)
             c.drawString(100, 720, f"Data length: {len(raw_data)} bytes")
             c.drawString(100, 700, f"Data format: {data_format}")
             c.drawString(100, 680, f"Received at: {time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -370,12 +422,18 @@ class PrinterOneServer:
             try:
                 text_content = self.extract_readable_text(raw_data)
                 if text_content and len(text_content.strip()) > 0:
-                    c.setFont("Helvetica-Bold", 14)
+                    if unicode_font:
+                        c.setFont(unicode_font, 14)
+                    else:
+                        c.setFont("Helvetica-Bold", 14)
                     c.drawString(100, y_position, "Content:")
                     y_position -= 30
                     
-                    # Display text content
-                    c.setFont("Helvetica", 11)
+                    # Display text content with Unicode font for Persian support
+                    if unicode_font:
+                        c.setFont(unicode_font, 11)
+                    else:
+                        c.setFont("Helvetica", 11)
                     lines = text_content.split('\n')
                     
                     for line in lines:
@@ -431,13 +489,21 @@ class PrinterOneServer:
     def extract_readable_text(self, raw_data):
         """Extract readable text from raw data"""
         try:
-            # Try UTF-8 first
+            # Try UTF-8 first (supports Persian and most international characters)
             try:
                 text = raw_data.decode('utf-8')
                 # Clean up control characters but keep printable ones
                 cleaned = ''.join(char if char.isprintable() or char in '\n\r\t' else ' ' for char in text)
                 return cleaned.strip()
             except UnicodeDecodeError:
+                pass
+            
+            # Try Windows-1256 (Persian/Arabic encoding)
+            try:
+                text = raw_data.decode('windows-1256', errors='ignore')
+                cleaned = ''.join(char if char.isprintable() or char in '\n\r\t' else ' ' for char in text)
+                return cleaned.strip()
+            except:
                 pass
             
             # Try Windows-1252 (common in Windows printing)
