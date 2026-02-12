@@ -490,6 +490,7 @@ class PrinterOneServer:
         """Extract readable text from raw data"""
         try:
             # Try UTF-8 first (supports Persian and most international characters)
+            # This is the preferred encoding for Persian text
             try:
                 text = raw_data.decode('utf-8')
                 # Clean up control characters but keep printable ones
@@ -498,27 +499,32 @@ class PrinterOneServer:
             except UnicodeDecodeError:
                 pass
             
-            # Try Windows-1256 (Persian/Arabic encoding)
+            # Try Windows-1256 (Arabic encoding - limited Persian support)
+            # Note: Windows-1256 doesn't support all Persian characters (e.g., Persian Yeh ی)
+            # but may work for some legacy systems
             try:
                 text = raw_data.decode('windows-1256', errors='ignore')
                 cleaned = ''.join(char if char.isprintable() or char in '\n\r\t' else ' ' for char in text)
-                return cleaned.strip()
+                if cleaned.strip():
+                    return cleaned.strip()
             except:
                 pass
             
-            # Try Windows-1252 (common in Windows printing)
+            # Try Windows-1252 (common in Windows printing for Latin text)
             try:
                 text = raw_data.decode('windows-1252', errors='ignore')
                 cleaned = ''.join(char if char.isprintable() or char in '\n\r\t' else ' ' for char in text)
-                return cleaned.strip()
+                if cleaned.strip():
+                    return cleaned.strip()
             except:
                 pass
             
-            # Try ASCII with error handling
+            # Try ASCII with error handling as last resort
             try:
                 text = raw_data.decode('ascii', errors='ignore')
                 cleaned = ''.join(char if char.isprintable() or char in '\n\r\t' else ' ' for char in text)
-                return cleaned.strip()
+                if cleaned.strip():
+                    return cleaned.strip()
             except:
                 pass
             
