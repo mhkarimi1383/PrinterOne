@@ -130,22 +130,49 @@ Once the server is running, other machines can send print jobs to:
 YOUR_IP_ADDRESS:9100
 ```
 
-Example using netcat:
+### Quick Examples
+
+**Using netcat:**
 ```bash
 echo "Hello World" | nc YOUR_IP_ADDRESS 9100
 ```
 
-Example using Python:
+**Using Python:**
 ```python
 import socket
 
 def send_to_printer(data, host='192.168.1.100', port=9100):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.connect((host, port))
-        s.send(data.encode())
+        s.send(data.encode('utf-8'))
 
 send_to_printer("Test print job")
 ```
+
+**Using PowerShell:**
+```powershell
+$client = New-Object System.Net.Sockets.TcpClient
+$client.Connect("192.168.1.100", 9100)
+$stream = $client.GetStream()
+$bytes = [System.Text.Encoding]::UTF8.GetBytes("Test print job")
+$stream.Write($bytes, 0, $bytes.Length)
+$stream.Close()
+$client.Close()
+```
+
+### 📚 Comprehensive Examples
+
+For more detailed examples including:
+- Error handling and timeout management
+- Sending files to the printer
+- Persian/Unicode text support
+- Reusable functions and classes
+- Advanced usage scenarios
+
+See the **[examples](examples/)** directory:
+- **[Python Examples](examples/python_examples.py)** - Comprehensive Python client examples
+- **[PowerShell Examples](examples/powershell_examples.ps1)** - Comprehensive PowerShell client examples
+- **[Examples README](examples/README.md)** - Full documentation and quick start guide
 
 ## � Windows Firewall & Network Security
 
