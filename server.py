@@ -641,6 +641,31 @@ class PrinterOneServer:
             
             return f"Binary/Unknown format ({len(data)} bytes)"
     
+    def is_plain_text_data(self, data):
+        """Check if data is plain text (not formatted printer data)"""
+        if len(data) == 0:
+            return False
+        
+        # Check for common printer command formats - these should NOT be converted
+        if data.startswith(b'\x1b'):  # ESC/P
+            return False
+        elif data.startswith(b'%!PS'):  # PostScript
+            return False
+        elif data.startswith(b'\x02'):  # ZPL
+            return False
+        elif b'%PDF' in data[:100]:  # PDF
+            return False
+        
+        # Check if it's printable text
+        try:
+            decoded = data.decode('utf-8', errors='ignore')
+            if len(decoded.strip()) > 0 and any(c.isprintable() and c not in '\r\n\t' for c in decoded[:200]):
+                return True
+        except:
+            pass
+        
+        return False
+    
     def print_raw(self, data, printer_name):
         """Send raw data to printer"""
         try:
@@ -675,9 +700,27 @@ class PrinterOneServer:
             
             if data:
                 self.log(f"[DATA] Received {len(data)} bytes from {address}")
-                self.log(f"[INFO] Data format: {self.analyze_raw_data(data)}")
+                data_format = self.analyze_raw_data(data)
+                self.log(f"[INFO] Data format: {data_format}")
+                
                 printer_name = self.config.get("printer_name", "")
                 if printer_name:
+                    # Check if we should convert plain text to PDF
+                    use_pdf_conversion = self.config.get("use_pdf_conversion", True)
+                    
+                    # Convert plain text to PDF for PDF printers if enabled
+                    if use_pdf_conversion and "Microsoft Print to PDF" in printer_name and self.is_plain_text_data(data):
+                        self.log(f"[PDF] Converting plain text to PDF for PDF printer...")
+                        try:
+                            pdf_data = self.convert_raw_to_pdf(data, save_file=False)
+                            if pdf_data:
+                                data = pdf_data
+                                self.log(f"[OK] Text converted to PDF ({len(data)} bytes)")
+                            else:
+                                self.log(f"[WARN] PDF conversion failed, using raw data")
+                        except Exception as e:
+                            self.log(f"[WARN] PDF conversion error: {e}, using raw data")
+                    
                     self.print_raw(data, printer_name)
                 else:
                     self.log(f"[!] No printer configured")
