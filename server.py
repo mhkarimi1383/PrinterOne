@@ -140,6 +140,9 @@ except ImportError:
 SERVER_RUNNING = True
 AUTO_START_MODE = False
 
+# Encoding constants
+MAX_REPLACEMENT_CHAR_RATIO = 0.3  # Maximum ratio of replacement characters before rejecting decoded text
+
 class PrinterOneServer:
     """PrinterOne TCP Server"""
     
@@ -157,6 +160,10 @@ class PrinterOneServer:
             self.server_thread = None
             self.running = False
             self.log_callback = log_callback  # Callback function for logging to GUI
+            
+            # Initialize Unicode font registration state
+            self._unicode_font_registered = False
+            self._unicode_font_name = None
             
             if startup_logger:
                 startup_logger.info("PrinterOneServer initialized successfully")
@@ -348,7 +355,7 @@ class PrinterOneServer:
         """Find and register a font that supports Persian/Arabic characters"""
         try:
             # Check if font is already registered
-            if hasattr(self, '_unicode_font_registered') and self._unicode_font_registered and hasattr(self, '_unicode_font_name'):
+            if self._unicode_font_registered:
                 return self._unicode_font_name
             
             # Verify we're on Windows
@@ -515,7 +522,7 @@ class PrinterOneServer:
             try:
                 text = raw_data.decode('windows-1256', errors='replace')
                 # Check if we have meaningful text (not just replacement characters)
-                if text.count('�') < len(text) * 0.3:  # Less than 30% replacement chars
+                if text.count('�') < len(text) * MAX_REPLACEMENT_CHAR_RATIO:
                     cleaned = ''.join(char if char.isprintable() or char in '\n\r\t' else ' ' for char in text)
                     if cleaned.strip():
                         return cleaned.strip()
